@@ -7,6 +7,7 @@ import {
   MpaBadge,
   StatusBadge,
   ContextBadge,
+  TagBadge,
 } from "./Badge";
 import { RatingPill } from "./Stars";
 import { seriesProgress, formatFileSize } from "@/lib/store";
@@ -15,6 +16,7 @@ import { cn } from "@/lib/utils";
 export function MediaCard({
   media,
   hardDrives,
+  tags = [],
   view = "grid",
   onEdit,
   selectMode,
@@ -30,6 +32,9 @@ export function MediaCard({
     ?.match(/(4K|2160p|1080p|720p|480p|UHD)/i)?.[1]
     ?.toUpperCase();
   const progress = media.type === "series" ? seriesProgress(media) : null;
+  const itemTags = (media.tag_ids || [])
+    .map((tid) => tags.find((t) => t.id === tid))
+    .filter(Boolean);
 
   if (view === "table") {
     return (
@@ -59,6 +64,17 @@ export function MediaCard({
                 {media.title_english}
               </span>
             </Link>
+            {itemTags.length > 0 && (
+              <span className="hidden lg:inline-flex flex-wrap gap-1">
+                {itemTags.slice(0, 2).map((t) => (
+                  <TagBadge
+                    key={t.id}
+                    name={t.name}
+                    to={`/catalog?tag=${t.id}`}
+                  />
+                ))}
+              </span>
+            )}
             {onEdit && (
               <button
                 onClick={(e) => {
@@ -209,6 +225,9 @@ export function MediaCard({
           context={media.watchlist_context}
           to={`/catalog?context=${media.watchlist_context}`}
         />
+        {itemTags.map((t) => (
+          <TagBadge key={t.id} name={t.name} to={`/catalog?tag=${t.id}`} />
+        ))}
       </div>
 
       {progress && (

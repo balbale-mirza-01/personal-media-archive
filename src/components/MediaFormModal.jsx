@@ -37,6 +37,7 @@ function emptyMedia() {
     mpa_rating: "",
     plot_summary: "",
     genre_ids: [],
+    tag_ids: [],
     watch_status: "unwatched",
     watchlist_context: "alone",
     notes: "",
@@ -62,6 +63,7 @@ export function MediaFormModal({ media, onClose }) {
     if (!base.files) base.files = [];
     if (!base.seasons) base.seasons = [];
     if (!base.genre_ids) base.genre_ids = [];
+    if (!base.tag_ids) base.tag_ids = [];
     return base;
   });
   const isEdit = !!media;
@@ -73,6 +75,13 @@ export function MediaFormModal({ media, onClose }) {
       genre_ids: p.genre_ids.includes(gid)
         ? p.genre_ids.filter((x) => x !== gid)
         : [...p.genre_ids, gid],
+    }));
+  const toggleTag = (tid) =>
+    setForm((p) => ({
+      ...p,
+      tag_ids: p.tag_ids.includes(tid)
+        ? p.tag_ids.filter((x) => x !== tid)
+        : [...p.tag_ids, tid],
     }));
 
   // Files
@@ -451,6 +460,34 @@ export function MediaFormModal({ media, onClose }) {
                   </button>
                 );
               })}
+            </div>
+          </Section>
+
+          <Section title="Tags">
+            <div className="flex flex-wrap gap-2">
+              {db.tags.map((t) => {
+                const active = form.tag_ids.includes(t.id);
+                return (
+                  <button
+                    type="button"
+                    key={t.id}
+                    onClick={() => toggleTag(t.id)}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset transition-colors",
+                      active
+                        ? "bg-teal-600 text-white ring-teal-600"
+                        : "bg-slate-100 text-slate-700 dark:bg-slate-700/40 dark:text-slate-300 ring-slate-300 dark:ring-slate-600 hover:ring-teal-400",
+                    )}
+                  >
+                    #{t.name}
+                  </button>
+                );
+              })}
+              {db.tags.length === 0 && (
+                <p className="text-xs text-slate-400">
+                  No tags yet — create some in Settings.
+                </p>
+              )}
             </div>
           </Section>
 

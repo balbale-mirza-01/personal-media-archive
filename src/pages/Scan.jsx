@@ -11,11 +11,7 @@ import {
   HardDrive,
 } from "lucide-react";
 import { useStore } from "@/lib/StoreContext";
-import {
-  parseFilename,
-  mockImdbSearch,
-  uid,
-} from "@/lib/store";
+import { parseFilename, mockImdbSearch, uid } from "@/lib/store";
 import { QualityBadge, MpaBadge } from "@/components/Badge";
 import { RatingPill } from "@/components/Stars";
 import { cn } from "@/lib/utils";

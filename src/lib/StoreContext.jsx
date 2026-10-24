@@ -5,13 +5,33 @@ import React, {
   useState,
   useCallback,
 } from "react";
-import { loadDB, saveDB, resetDB, uid } from "./store";
+import { loadDB, saveDB, resetDB, uid, emptyMediaDefaults } from "./store";
 import { seedData } from "./seedData";
 
 const StoreContext = createContext(null);
 
+// One-time migration for databases persisted before the Tags feature:
+// backfill tag_ids arrays and seed the default tag collection.
+function migrate(db) {
+  let changed = false;
+  if (!Array.isArray(db.tags)) {
+    db.tags = structuredClone(seedData.tags || []);
+    changed = true;
+  }
+  for (const m of db.media || []) {
+    if (!Array.isArray(m.tag_ids)) {
+      m.tag_ids = [];
+      changed = true;
+    }
+  }
+  return changed ? db : null;
+}
+
 export function StoreProvider({ children }) {
-  const [db, setDb] = useState(() => loadDB());
+  const [db, setDb] = useState(() => {
+    const loaded = loadDB();
+    return migrate(loaded) || loaded;
+  });
 
   useEffect(() => {
     saveDB(db);
@@ -186,6 +206,58 @@ export function StoreProvider({ children }) {
     [update],
   );
 
+  // ---- Tag CRUD ----
+  const addTag = useCallback(
+    (t) => {
+      const item = { id: uid("t"), ...t };
+      update((d) => {
+        d.tags.push(item);
+        return d;
+      });
+      return item;
+    },
+    [update],
+  );
+  const updateTag = useCallback(
+    (id, patch) => {
+      update((d) => {
+        const i = d.tags.findIndex((x) => x.id === id);
+        if (i >= 0) d.tags[i] = { ...d.tags[i], ...patch };
+        return d;
+      });
+    },
+    [update],
+  );
+  const deleteTag = useCallback(
+    (id) => {
+      update((d) => {
+        d.tags = d.tags.filter((x) => x.id !== id);
+        d.media = d.media.map((m) => ({
+          ...m,
+          tag_ids: (m.tag_ids || []).filter((tid) => tid !== id),
+        }));
+        return d;
+      });
+    },
+    [update],
+  );
+  const bulkAddTags = useCallback(
+    (mediaIds, tagIds) => {
+      update((d) => {
+        d.media = d.media.map((m) =>
+          mediaIds.includes(m.id)
+            ? {
+                ...m,
+                tag_ids: [...new Set([...(m.tag_ids || []), ...tagIds])],
+              }
+            : m,
+        );
+        return d;
+      });
+    },
+    [update],
+  );
+
   const resetToSeed = useCallback(() => {
     resetDB();
     setDb(structuredClone(seedData));
@@ -193,9 +265,59 @@ export function StoreProvider({ children }) {
 
   const importData = useCallback((data) => {
     if (data && typeof data === "object") {
-      setDb({ ...structuredClone(seedData), ...data });
+      setDb((prev) => {
+        const next = { ...structuredClone(seedData), ...data };
+        return migrate(next) || next;
+      });
     }
   }, []);
+
+  // Merge a list of parsed rows into the catalog.
+  // mode: "create" | "skip" | "update" (on imdb_id / title+year duplicates)
+  const bulkImportMedia = useCallback(
+    (rows, mode = "create") => {
+      let created = 0;
+      let updated = 0;
+      let skipped = 0;
+      update((d) => {
+        for (const row of rows) {
+          const normTitle = (row.title_english || "").toLowerCase().trim();
+          const dupIdx = d.media.findIndex(
+            (m) =>
+              (row.imdb_id && m.imdb_id === row.imdb_id) ||
+              (normTitle &&
+                m.title_english?.toLowerCase().trim() === normTitle &&
+                (row.release_year == null ||
+                  m.release_year === Number(row.release_year))),
+          );
+          if (dupIdx >= 0) {
+            if (mode === "update") {
+              d.media[dupIdx] = {
+                ...d.media[dupIdx],
+                ...row,
+                id: d.media[dupIdx].id,
+              };
+              updated++;
+            } else {
+              skipped++;
+            }
+          } else {
+            d.media.unshift({
+              id: uid("m"),
+              files: [],
+              seasons: [],
+              ...emptyMediaDefaults(),
+              ...row,
+            });
+            created++;
+          }
+        }
+        return d;
+      });
+      return { created, updated, skipped, total: rows.length };
+    },
+    [update],
+  );
 
   const value = {
     db,
@@ -212,6 +334,11 @@ export function StoreProvider({ children }) {
     addHardDrive,
     updateHardDrive,
     deleteHardDrive,
+    addTag,
+    updateTag,
+    deleteTag,
+    bulkAddTags,
+    bulkImportMedia,
     resetToSeed,
     importData,
   };

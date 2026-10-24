@@ -8,10 +8,12 @@ import {
   X,
   Plus,
   CheckSquare,
+  Upload,
 } from "lucide-react";
 import { useStore } from "@/lib/StoreContext";
 import { MediaCard } from "@/components/MediaCard";
 import { MediaFormModal } from "@/components/MediaFormModal";
+import { ImportDialog } from "@/components/ImportDialog";
 import { BulkActions } from "@/components/BulkActions";
 import { fullName } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -28,6 +30,7 @@ const ALL_FILTERS = {
   status: "all",
   context: "all",
   genre: "all",
+  tag: "all",
   type: "all",
   quality: "all",
   subtitle: "all",
@@ -43,6 +46,7 @@ function fromParams(sp) {
     status: sp.get("status") || "all",
     context: sp.get("context") || "all",
     genre: sp.get("genre") || "all",
+    tag: sp.get("tag") || "all",
     quality: sp.get("quality") || "all",
     mpa: sp.get("mpa") || "all",
     person: sp.get("person") || "all",
@@ -57,6 +61,7 @@ export default function Catalog() {
   const [filters, setFilters] = useState(() => fromParams(searchParams));
   const [showFilters, setShowFilters] = useState(true);
   const [editing, setEditing] = useState(null); // media object for form, or 'new', or null
+  const [importOpen, setImportOpen] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const toggleSelect = (id) =>
@@ -101,6 +106,8 @@ export default function Catalog() {
         !(m.genre_ids || []).includes(filters.genre)
       )
         return false;
+      if (filters.tag !== "all" && !(m.tag_ids || []).includes(filters.tag))
+        return false;
       if (filters.mpa !== "all" && m.mpa_rating !== filters.mpa) return false;
       if (filters.hardDrive !== "all") {
         const onHd = (m.files || []).some(
@@ -134,6 +141,10 @@ export default function Catalog() {
     filters.genre !== "all"
       ? db.genres.find((g) => g.id === filters.genre)
       : null;
+  const activeTag =
+    filters.tag !== "all"
+      ? (db.tags || []).find((t) => t.id === filters.tag)
+      : null;
   const activePerson =
     filters.person !== "all"
       ? db.persons.find((p) => p.id === filters.person)
@@ -162,6 +173,13 @@ export default function Catalog() {
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 text-sm font-medium"
           >
             <Plus className="h-4 w-4" /> Add Media
+          </button>
+          <button
+            onClick={() => setImportOpen(true)}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-border px-3.5 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:border-teal-400 transition-colors"
+            title="Bulk import from Excel / CSV / clipboard"
+          >
+            <Upload className="h-4 w-4" /> Import
           </button>
           <button
             onClick={() => {
@@ -221,9 +239,10 @@ export default function Catalog() {
       </div>
 
       {/* Active prefilter banner */}
-      {(activeGenre || activePerson || activeHdd) && (
+      {(activeGenre || activePerson || activeHdd || activeTag) && (
         <div className="rounded-lg bg-teal-50 dark:bg-teal-500/10 border border-teal-200 dark:border-teal-800/50 px-4 py-2.5 text-sm text-teal-700 dark:text-teal-300">
           Filtering by: {activeGenre && <b>{activeGenre.name}</b>}
+          {activeTag && <b>#{activeTag.name}</b>}
           {activePerson && <b>{fullName(activePerson)}</b>}
           {activeHdd && (
             <b>
@@ -294,6 +313,18 @@ export default function Catalog() {
               options={[
                 { value: "all", label: "All" },
                 ...db.genres.map((g) => ({ value: g.id, label: g.name })),
+              ]}
+            />
+            <FilterSelect
+              label="Tag"
+              value={filters.tag}
+              onChange={(v) => setF("tag", v)}
+              options={[
+                { value: "all", label: "All" },
+                ...(db.tags || []).map((t) => ({
+                  value: t.id,
+                  label: `#${t.name}`,
+                })),
               ]}
             />
             <FilterSelect
@@ -375,6 +406,7 @@ export default function Catalog() {
               key={m.id}
               media={m}
               hardDrives={db.hardDrives}
+              tags={db.tags || []}
               onEdit={setEditing}
               selectMode={selectMode}
               selected={selected}
@@ -406,6 +438,7 @@ export default function Catalog() {
                   key={m.id}
                   media={m}
                   hardDrives={db.hardDrives}
+                  tags={db.tags || []}
                   view="table"
                   onEdit={setEditing}
                   selectMode={selectMode}
@@ -429,6 +462,8 @@ export default function Catalog() {
           onClose={() => setEditing(null)}
         />
       )}
+
+      {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
     </div>
   );
 }

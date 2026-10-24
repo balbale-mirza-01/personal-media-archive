@@ -19,6 +19,7 @@ import {
   FileVideo,
   Layers,
   Tag,
+  Shapes,
 } from "lucide-react";
 import { MediaFormModal } from "@/components/MediaFormModal";
 import { useStore } from "@/lib/StoreContext";
@@ -31,6 +32,7 @@ import {
   StatusBadge,
   ContextBadge,
   Badge,
+  TagBadge,
 } from "@/components/Badge";
 import { Stars, RatingPill } from "@/components/Stars";
 import { formatFileSize, seriesProgress, fullName } from "@/lib/store";
@@ -319,6 +321,25 @@ function OverviewTab({ media, db }) {
             )}
           </div>
         </div>
+        {(media.tag_ids || []).length > 0 && (
+          <div className="rounded-xl border border-border bg-card p-5">
+            <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Shapes className="h-4 w-4 text-teal-500" /> Tags
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {media.tag_ids
+                .map((tid) => db.tags.find((t) => t.id === tid))
+                .filter(Boolean)
+                .map((t) => (
+                  <TagBadge
+                    key={t.id}
+                    name={t.name}
+                    to={`/catalog?tag=${t.id}`}
+                  />
+                ))}
+            </div>
+          </div>
+        )}
         <div className="rounded-xl border border-border bg-card p-5">
           <h3 className="font-semibold text-foreground mb-3">Details</h3>
           <dl className="space-y-2 text-sm">

@@ -28,6 +28,14 @@ export const seedData = {
     },
   ],
 
+  tags: [
+    { id: "t1", name: "favorites" },
+    { id: "t2", name: "rewatch" },
+    { id: "t3", name: "4k-remaster" },
+    { id: "t4", name: "kids-safe" },
+    { id: "t5", name: "movie-night" },
+  ],
+
   genres: [
     {
       id: "g1",
@@ -262,11 +270,13 @@ export const seedData = {
       personal_parental_notes:
         "Safe to watch with wife; intense but not graphic. Skip with young kids.",
       watch_status: "watched",
+      tag_ids: [],
       watchlist_context: "with_wife",
       watchlist_added_at: "2024-03-12",
       notes:
         "Re-watch every year. The hallway fight sequence is a masterclass.",
       genre_ids: ["g1", "g2", "g4", "g8", "g9"],
+      tag_ids: ["t1", "t2"],
       cast: [
         { person_id: "p2", role: "Dom Cobb", role_type: "actor" },
         { person_id: "p3", role: "Robert Fischer", role_type: "actor" },
@@ -317,10 +327,12 @@ export const seedData = {
       personal_parental_notes:
         "Emotionally heavy for kids under 12. Beautiful with wife.",
       watch_status: "watched",
+      tag_ids: [],
       watchlist_context: "family_with_kids",
       watchlist_added_at: "2024-01-05",
       notes: "Hans Zimmer score on the sound system is essential.",
       genre_ids: ["g2", "g3", "g7", "g10"],
+      tag_ids: ["t1", "t5"],
       cast: [{ person_id: "p4", role: "Cooper", role_type: "actor" }],
       crew: [{ person_id: "p1", role: "Director", role_type: "director" }],
       files: [
@@ -367,10 +379,12 @@ export const seedData = {
       personal_parental_notes:
         "Older kids OK; the spice visions may unsettle the youngest.",
       watch_status: "unwatched",
+      tag_ids: [],
       watchlist_context: "with_wife",
       watchlist_added_at: "2025-09-01",
       notes: "Queue for a weekend with the good speakers.",
       genre_ids: ["g2", "g3", "g7", "g10"],
+      tag_ids: ["t3"],
       cast: [{ person_id: "p8", role: "Paul Atreides", role_type: "actor" }],
       crew: [{ person_id: "p9", role: "Director", role_type: "director" }],
       files: [
@@ -424,10 +438,12 @@ export const seedData = {
       personal_parental_notes:
         "Adults only. Definitely not for the kids; debatable even for a date night.",
       watch_status: "missing",
+      tag_ids: [],
       watchlist_context: "alone",
       watchlist_added_at: "2025-10-10",
       notes: "File reported missing after the HDD2 drop. Re-rip needed.",
       genre_ids: ["g1", "g4", "g6"],
+      tag_ids: ["t4"],
       cast: [{ person_id: "p2", role: "Lead", role_type: "actor" }],
       crew: [{ person_id: "p1", role: "Director", role_type: "director" }],
       files: [
@@ -474,10 +490,12 @@ export const seedData = {
       personal_parental_notes:
         "Wife and me only. The language alone rules out family viewing.",
       watch_status: "watching",
+      tag_ids: [],
       watchlist_context: "with_wife",
       watchlist_added_at: "2024-11-20",
       notes: "Season 5 finale queued for the weekend.",
       genre_ids: ["g3", "g5", "g11"],
+      tag_ids: ["t1", "t3"],
       cast: [
         { person_id: "p6", role: 'Miriam "Midge" Maisel', role_type: "actor" },
       ],
@@ -598,10 +616,12 @@ export const seedData = {
       personal_parental_notes:
         "Solo viewing only. Not appropriate for the household in shared rooms.",
       watch_status: "watched",
+      tag_ids: [],
       watchlist_context: "alone",
       watchlist_added_at: "2023-06-01",
       notes: "Finished. Ozymandias is the best hour of television ever made.",
       genre_ids: ["g3", "g4", "g6"],
+      tag_ids: ["t2", "t5"],
       cast: [{ person_id: "p7", role: "Walter White", role_type: "actor" }],
       crew: [
         { person_id: "p1", role: "Director (S1E1)", role_type: "director" },

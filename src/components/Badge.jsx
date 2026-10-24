@@ -112,6 +112,16 @@ export function StatusBadge({ status, to }) {
   );
 }
 
+// `tone` distinguishes free-form Tags (slate) from IMDb Genres (teal).
+export function TagBadge({ name, to, tone = "slate" }) {
+  if (!name) return null;
+  return (
+    <Badge tone={tone} to={to}>
+      {tone === "slate" ? `#${name}` : name}
+    </Badge>
+  );
+}
+
 const contextTone = (c) =>
   ({ alone: "violet", with_wife: "rose", family_with_kids: "green" })[c] ||
   "slate";

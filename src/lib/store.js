@@ -28,6 +28,38 @@ export function uid(prefix = "id") {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
+// Default shape for media records created outside the form modal
+// (e.g. bulk imports), so every page can assume these keys exist.
+export function emptyMediaDefaults() {
+  return {
+    type: "movie",
+    imdb_id: "",
+    title_original: "",
+    title_english: "",
+    release_year: null,
+    end_year: null,
+    imdb_rating: null,
+    imdb_votes: null,
+    personal_rating: 0,
+    runtime: null,
+    languages: [],
+    countries: [],
+    aspect_ratio: "",
+    mpa_rating: "",
+    plot_summary: "",
+    genre_ids: [],
+    tag_ids: [],
+    watch_status: "unwatched",
+    watchlist_context: "alone",
+    notes: "",
+    parents_guide_notes: {},
+    cast: [],
+    crew: [],
+    files: [],
+    seasons: [],
+  };
+}
+
 // ---- Filename parsing for the scan simulator ----
 export function parseFilename(filename) {
   const clean = filename

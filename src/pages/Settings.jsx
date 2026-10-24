@@ -10,6 +10,7 @@ import {
   FileJson,
   FileSpreadsheet,
   AlertTriangle,
+  Shapes,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useStore } from "@/lib/StoreContext";
@@ -24,6 +25,9 @@ export default function Settings() {
     addHardDrive,
     updateHardDrive,
     deleteHardDrive,
+    addTag,
+    updateTag,
+    deleteTag,
   } = useStore();
   const fileRef = useRef(null);
   const [msg, setMsg] = useState(null);
@@ -109,7 +113,7 @@ export default function Settings() {
         const data = JSON.parse(reader.result);
         importData(data);
         flash("Catalog imported successfully.");
-      } catch (err) {
+      } catch {
         flash("Import failed: invalid JSON file.", "error");
       }
     };
@@ -160,6 +164,42 @@ export default function Settings() {
     0,
     (Number(hdForm.total_space) || 0) - editingUsed,
   );
+
+  // ---- Tags management ----
+  const [editingTag, setEditingTag] = useState(null); // 'new' or tag object
+  const [tagForm, setTagForm] = useState({ name: "" });
+
+  const submitTag = (e) => {
+    e.preventDefault();
+    const name = tagForm.name.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!name) return;
+    if (editingTag === "new") {
+      if (db.tags.some((t) => t.name === name)) {
+        flash(`Tag "#${name}" already exists.`, "error");
+        return;
+      }
+      addTag({ name });
+      flash(`Tag "#${name}" created.`);
+    } else {
+      updateTag(editingTag.id, { name });
+      flash(`Tag renamed to "#${name}".`);
+    }
+    setEditingTag(null);
+  };
+
+  const removeTag = (t) => {
+    const used = db.media.filter((m) =>
+      (m.tag_ids || []).includes(t.id),
+    ).length;
+    if (
+      confirm(
+        `Delete tag "#${t.name}"? It will be removed from ${used} media item(s).`,
+      )
+    ) {
+      deleteTag(t.id);
+      flash(`Tag "#${t.name}" deleted.`);
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -319,6 +359,71 @@ export default function Settings() {
         </div>
       </section>
 
+      {/* Tags */}
+      <section className="rounded-xl border border-border bg-card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-semibold text-foreground flex items-center gap-2">
+              <Shapes className="h-5 w-5 text-teal-500" /> Tags
+            </h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Free-form labels for organizing your collection (watch order, box
+              sets, seasonal picks…).
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setEditingTag("new");
+              setTagForm({ name: "" });
+            }}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 text-sm font-medium"
+          >
+            <Plus className="h-4 w-4" /> New Tag
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {db.tags.map((t) => {
+            const count = db.media.filter((m) =>
+              (m.tag_ids || []).includes(t.id),
+            ).length;
+            return (
+              <span
+                key={t.id}
+                className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-700/40 pl-3 pr-1 py-1 text-xs font-medium text-slate-700 dark:text-slate-300 ring-1 ring-inset ring-slate-300 dark:ring-slate-600"
+              >
+                #{t.name}
+                <Link
+                  to={`/catalog?tag=${t.id}`}
+                  className="text-teal-600 dark:text-teal-400 hover:underline tabular-nums"
+                >
+                  {count}
+                </Link>
+                <button
+                  onClick={() => {
+                    setEditingTag(t);
+                    setTagForm({ name: t.name });
+                  }}
+                  className="p-0.5 text-slate-400 hover:text-teal-500 rounded"
+                  title="Rename tag"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+                <button
+                  onClick={() => removeTag(t)}
+                  className="p-0.5 text-slate-400 hover:text-rose-500 rounded"
+                  title="Delete tag"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </span>
+            );
+          })}
+          {db.tags.length === 0 && (
+            <p className="text-sm text-slate-400">No tags yet.</p>
+          )}
+        </div>
+      </section>
+
       {/* Danger zone */}
       <section className="rounded-xl border border-rose-200 dark:border-rose-800/50 bg-rose-50/30 dark:bg-rose-500/5 p-6">
         <h3 className="font-semibold text-rose-700 dark:text-rose-400 flex items-center gap-2 mb-1">
@@ -397,6 +502,41 @@ export default function Settings() {
               <button
                 type="button"
                 onClick={() => setEditingHd(null)}
+                className="rounded-lg border border-border px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 text-sm font-medium"
+              >
+                Save
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {editingTag && (
+        <Modal
+          title={editingTag === "new" ? "New Tag" : "Rename Tag"}
+          onClose={() => setEditingTag(null)}
+        >
+          <form onSubmit={submitTag} className="space-y-4">
+            <Field label="Tag name (letters, numbers, spaces)">
+              <input
+                value={tagForm.name}
+                onChange={(e) => setTagForm({ name: e.target.value })}
+                placeholder="e.g. christmas"
+                required
+                className="input"
+                autoFocus
+              />
+            </Field>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingTag(null)}
                 className="rounded-lg border border-border px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 Cancel
