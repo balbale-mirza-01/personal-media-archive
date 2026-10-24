@@ -1,8 +1,7 @@
 import React, { useState } from "react";
-import { ChevronDown, ChevronRight, Tv, Eye, EyeOff, Star } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/StoreContext";
-import { seriesProgress } from "@/lib/store";
 
 export function SeriesTree({ media }) {
   const [openSeasons, setOpenSeasons] = useState(() => {

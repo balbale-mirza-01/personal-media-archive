@@ -1,6 +1,6 @@
 import React from "react";
 import { Clapperboard, Shield, User, ArrowRight } from "lucide-react";
-import { setDemoUser } from "@/lib/demoAuth";
+import { useAuth } from "@/lib/AuthContext";
 import { cn } from "@/lib/utils";
 
 const ACCOUNTS = [
@@ -19,8 +19,10 @@ const ACCOUNTS = [
 ];
 
 export default function Login() {
+  const { login } = useAuth();
+
   const signIn = (acc) => {
-    setDemoUser({ role: acc.role, name: acc.name });
+    login({ role: acc.role, name: acc.name });
     window.location.href = "/";
   };
 

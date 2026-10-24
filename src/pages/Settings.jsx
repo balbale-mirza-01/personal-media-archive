@@ -10,7 +10,6 @@ import {
   FileJson,
   FileSpreadsheet,
   AlertTriangle,
-  ArrowRight,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useStore } from "@/lib/StoreContext";

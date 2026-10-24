@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, Plus, Trash2, Film, Tv } from "lucide-react";
+import { X, Plus, Trash2, Film } from "lucide-react";
 import { useStore } from "@/lib/StoreContext";
 import { uid, fullName } from "@/lib/store";
 import { Field } from "@/pages/Genres";

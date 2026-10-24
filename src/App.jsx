@@ -9,7 +9,6 @@ import {
 } from "react-router-dom";
 import PageNotFound from "./lib/PageNotFound";
 import { AuthProvider, useAuth } from "@/lib/AuthContext";
-import UserNotRegisteredError from "@/components/UserNotRegisteredError";
 import ScrollToTop from "./components/ScrollToTop";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { StoreProvider } from "@/lib/StoreContext";
@@ -17,9 +16,6 @@ import { ThemeProvider } from "@/lib/ThemeContext";
 import { Layout } from "@/components/Layout";
 // Auth pages
 import Login from "@/pages/Login";
-import Register from "@/pages/Register";
-import ForgotPassword from "@/pages/ForgotPassword";
-import ResetPassword from "@/pages/ResetPassword";
 // App pages
 import Home from "@/pages/Home";
 import Catalog from "@/pages/Catalog";
@@ -34,10 +30,9 @@ import HardDriveDetail from "@/pages/HardDriveDetail";
 import Watchlist from "@/pages/Watchlist";
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } =
-    useAuth();
+  const { isLoadingAuth, authError, navigateToLogin } = useAuth();
 
-  if (isLoadingPublicSettings || isLoadingAuth) {
+  if (isLoadingAuth) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background">
         <div className="w-8 h-8 border-4 border-slate-200 border-t-teal-600 rounded-full animate-spin"></div>
@@ -45,13 +40,9 @@ const AuthenticatedApp = () => {
     );
   }
 
-  if (authError) {
-    if (authError.type === "user_not_registered") {
-      return <UserNotRegisteredError />;
-    } else if (authError.type === "auth_required") {
-      navigateToLogin();
-      return null;
-    }
+  if (authError && authError.type === "auth_required") {
+    navigateToLogin();
+    return null;
   }
 
   return (
@@ -60,9 +51,6 @@ const AuthenticatedApp = () => {
         <Routes>
           {/* Auth routes */}
           <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
 
           {/* App routes */}
           <Route

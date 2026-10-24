@@ -14,7 +14,7 @@ import {
   Users,
 } from "lucide-react";
 import { useStore } from "@/lib/StoreContext";
-import { StatusBadge, ContextBadge, MpaBadge } from "@/components/Badge";
+import { StatusBadge, MpaBadge } from "@/components/Badge";
 import { RatingPill } from "@/components/Stars";
 import { seriesProgress } from "@/lib/store";
 import { cn } from "@/lib/utils";

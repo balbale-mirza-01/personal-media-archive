@@ -5,8 +5,6 @@ import {
   FileVideo,
   Search,
   Check,
-  X,
-  ChevronRight,
   Loader2,
   Plus,
   ClipboardPaste,
@@ -16,7 +14,6 @@ import { useStore } from "@/lib/StoreContext";
 import {
   parseFilename,
   mockImdbSearch,
-  mockImdbDetails,
   uid,
 } from "@/lib/store";
 import { QualityBadge, MpaBadge } from "@/components/Badge";

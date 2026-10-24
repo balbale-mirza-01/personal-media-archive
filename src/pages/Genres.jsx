@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { useStore } from "@/lib/StoreContext";
 import { Badge } from "@/components/Badge";
-import { cn } from "@/lib/utils";
 
 export default function Genres() {
   const { db, addGenre, updateGenre, deleteGenre } = useStore();

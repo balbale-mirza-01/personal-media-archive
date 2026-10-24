@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from "react";
-import { Users, Plus, Pencil, Trash2, Search, X, Film } from "lucide-react";
+import { Users, Plus, Pencil, Trash2, Search } from "lucide-react";
 import { useStore } from "@/lib/StoreContext";
 import { Badge } from "@/components/Badge";
 import { Modal, Field } from "./Genres";
 import { fullName } from "@/lib/store";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 export default function Persons() {
   const { db, addPerson, updatePerson, deletePerson } = useStore();
