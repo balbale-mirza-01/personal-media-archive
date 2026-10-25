@@ -15,6 +15,9 @@ urlpatterns = [
     path("", include(router.urls)),
     path("auth/token/", views.obtain_token, name="obtain-token"),
     path("bulk-import/", views.bulk_import, name="bulk-import"),
+    path("scan/", views.scan, name="scan"),
+    path("imdb/search/", views.imdb_search, name="imdb-search"),
+    path("ingest/", views.ingest, name="ingest"),
     path("episodes/<int:pk>/toggle/", views.episode_toggle, name="episode-toggle"),
     path("seasons/<int:pk>/recompute/", views.season_recompute, name="season-recompute"),
 ]

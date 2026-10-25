@@ -8,7 +8,10 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Genre, HardDrive, MediaItem, Person, Season, Tag
+from .imdb_client import get_title_details, search_titles
+from .ingest import ingest_selections
+from .models import Credit, Genre, HardDrive, MediaFile, MediaItem, Person, Season, Tag
+from .scanner import scan_directory
 from .selectors import recompute_season, recompute_series
 from .serializers import (
     BulkImportSerializer,
@@ -100,6 +103,34 @@ class MediaItemViewSet(viewsets.ModelViewSet):
     serializer_class = MediaItemSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_serializer(self, *args, **kwargs):
+        # Accept the frontend's nested write payloads (cast/crew) under the
+        # canonical `credit_payloads` key.
+        data = kwargs.get("data")
+        if data is None and len(args) > 1:
+            data = args[1]
+        try:
+            has_credits = "credits" in data
+        except TypeError:
+            has_credits = False
+        if has_credits and "credit_payloads" not in data:
+            mutable = dict(data)
+            raw = mutable.pop("credits")
+            if isinstance(raw, list):
+                mutable["credit_payloads"] = [
+                    {
+                        "person": c.get("person_id") or c.get("person"),
+                        "role": c.get("role_type") or c.get("role") or "actor",
+                        "character_name": c.get("character_name")
+                        or (c.get("role") if c.get("role_type") == "actor" else ""),
+                        "order": c.get("order", i),
+                    }
+                    for i, c in enumerate(raw)
+                    if isinstance(c, dict)
+                ]
+            kwargs["data"] = mutable
+        return super().get_serializer(*args, **kwargs)
+
     def get_queryset(self):
         qs = super().get_queryset()
         p = self.request.query_params
@@ -128,7 +159,7 @@ class MediaItemViewSet(viewsets.ModelViewSet):
     def bulk_delete(self, request):
         ids = request.data.get("ids", [])
         deleted, _ = MediaItem.objects.filter(id__in=ids).delete()
-        return Response({"deleted": len(ids)})
+        return Response({"deleted": deleted})
 
     @action(detail=False, methods=["post"], url_path="bulk-add-genres")
     def bulk_add_genres(self, request):
@@ -209,19 +240,22 @@ def bulk_import(request):
     """
     serializer = BulkImportSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-    created, skipped, errors = 0, 0, []
+    created, updated, skipped, errors = 0, 0, 0, []
+    default_mode = serializer.validated_data.get("mode", "skip")
 
     with transaction.atomic():
         for idx, row in enumerate(serializer.validated_data["rows"]):
             title = row["title_en"].strip()
             imdb_id = (row.get("imdb_id") or "").strip()
+            row_mode = row.get("mode") or default_mode
+            skip_dup = row_mode != "create" and row.get("skip_duplicates", True)
             try:
                 dup = None
                 if imdb_id:
                     dup = MediaItem.objects.filter(imdb_id=imdb_id).first()
                 if dup is None:
                     dup = MediaItem.objects.filter(title_en__iexact=title, year=row.get("year")).first()
-                if dup and row.get("skip_duplicates", True):
+                if dup and skip_dup:
                     skipped += 1
                     continue
                 item = dup or MediaItem.objects.create(
@@ -231,6 +265,10 @@ def bulk_import(request):
                     year=row.get("year"),
                     media_type=row.get("media_type", "movie"),
                 )
+                if dup:
+                    updated += 1
+                else:
+                    created += 1
                 for gname in row.get("genres", []):
                     if gname.strip():
                         genre, _ = Genre.objects.get_or_create(name=gname.strip(),
@@ -255,3 +293,77 @@ def bulk_import(request):
                 errors.append({"row": idx, "error": str(exc)})
 
     return Response({"created": created, "skipped": skipped, "errors": errors})
+
+
+# ---------------------------------------------------------------------------
+# Phase 6: Hard-drive scan & IMDb matcher/scraper endpoints
+# ---------------------------------------------------------------------------
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def scan(request):
+    """Recursively scan a server-visible folder for MKV/MP4 files.
+
+    Body: {"path": "/mnt/hdd1", "max_files": 5000}
+    Returns grouped movie/series candidates ready for user verification plus
+    per-group IMDb search hints (title_guess/year). Nothing is written to the DB.
+    """
+    path = (request.data.get("path") or "").strip()
+    if not path:
+        return Response({"error": "path is required"}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        max_files = int(request.data.get("max_files", 5000))
+    except (TypeError, ValueError):
+        max_files = 5000
+    try:
+        groups, stats = scan_directory(path, max_files=max_files)
+    except ValueError as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({"path": path, "groups": groups, "stats": stats})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def imdb_search(request):
+    """IMDb candidate list for user verification.
+
+    Query params: q (required), year, type=movie|series.
+    Also supports ?imdb_id=tt####### to fetch full scraped details directly.
+    """
+    imdb_id = (request.query_params.get("imdb_id") or "").strip()
+    if imdb_id:
+        details = get_title_details(imdb_id)
+        if details is None:
+            return Response({"error": f"No IMDb data for {imdb_id}"},
+                            status=status.HTTP_404_NOT_FOUND)
+        return Response({"imdb_id": imdb_id, "details": details})
+
+    q = (request.query_params.get("q") or "").strip()
+    if not q:
+        return Response({"error": "q or imdb_id is required"},
+                        status=status.HTTP_400_BAD_REQUEST)
+    year = request.query_params.get("year")
+    media_type = request.query_params.get("type")
+    candidates = search_titles(q, int(year) if year else None, media_type)
+    return Response({"query": q, "candidates": candidates})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def ingest(request):
+    """Ingest user-verified scan selections into the database.
+
+    Body: {"selections": [{imdb_id, kind, title_guess, year,
+                           files:[...] | seasons:[{season, episodes:[...]}]}]}
+    Scrapes/fetches IMDb metadata per selection and writes MediaItem, Genre,
+    Person, Credit, Season, Episode and MediaFile rows transactionally.
+    """
+    selections = request.data.get("selections")
+    if not isinstance(selections, list) or not selections:
+        return Response({"error": "selections[] is required"},
+                        status=status.HTTP_400_BAD_REQUEST)
+    try:
+        results = ingest_selections(selections)
+    except Exception as exc:  # noqa: BLE001 - surface pipeline errors as 400
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({"results": results})

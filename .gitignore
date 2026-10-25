@@ -43,3 +43,9 @@ build
 backend/.venv/
 backend/venv/
 backend/db.sqlite*
+
+
+# Python
+__pycache__/
+*.pyc
+

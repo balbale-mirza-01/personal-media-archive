@@ -67,13 +67,10 @@ class PersonSerializer(serializers.ModelSerializer):
 
 class CreditSerializer(serializers.ModelSerializer):
     person = PersonSerializer(read_only=True)
-    person_id = serializers.PrimaryKeyRelatedField(
-        source="person", queryset=Person.objects.all(), write_only=True, required=False
-    )
 
     class Meta:
         model = Credit
-        fields = ["id", "person", "person_id", "role", "character_name", "order"]
+        fields = ["id", "person", "role", "character_name", "order"]
 
 
 class EpisodeSerializer(serializers.ModelSerializer):
@@ -135,6 +132,12 @@ class MediaItemSerializer(serializers.ModelSerializer):
     season_payloads = serializers.ListField(
         child=serializers.DictField(), required=False, write_only=True
     )
+    file_payloads = serializers.ListField(
+        child=serializers.DictField(), required=False, write_only=True
+    )
+    credit_payloads = serializers.ListField(
+        child=serializers.DictField(), required=False, write_only=True
+    )
 
     class Meta:
         model = MediaItem
@@ -147,6 +150,7 @@ class MediaItemSerializer(serializers.ModelSerializer):
             "watch_status", "watchlist_context", "watchlist_added_at",
             "parents_guide", "parental_notes", "notes",
             "files", "seasons", "season_payloads",
+            "file_payloads", "credit_payloads",
             "created_at", "updated_at",
         ]
 
@@ -160,13 +164,87 @@ class MediaItemSerializer(serializers.ModelSerializer):
         payload = rel.get("season_payloads") or initial.get("season_payloads")
         if payload:
             self._sync_seasons(instance, payload)
+        fpayload = rel.get("file_payloads")
+        if fpayload is not None:
+            self._sync_files(instance, fpayload)
+        cpayload = rel.get("credit_payloads")
+        if cpayload is not None:
+            self._sync_credits(instance, cpayload)
+
+    def _sync_files(self, instance, payloads):
+        """Replace the item's physical file rows from a nested payload."""
+        episode_map = {}
+        for season in instance.seasons.prefetch_related("episodes"):
+            for ep in season.episodes.all():
+                episode_map[f"{season.season_number}x{ep.episode_number}"] = ep
+        instance.files.all().delete()
+        for fdata in payloads:
+            ep_key = fdata.get("episode_ref")  # e.g. "1x03" (optional)
+            episode = None
+            if ep_key and ep_key in episode_map:
+                episode = episode_map[ep_key]
+            elif fdata.get("episode"):
+                try:
+                    episode = Episode.objects.get(pk=fdata["episode"])
+                except (Episode.DoesNotExist, ValueError, TypeError):
+                    episode = None
+            MediaFile.objects.create(
+                media_item=instance,
+                hard_drive_id=fdata.get("hard_drive_id"),
+                file_path=fdata.get("file_path", ""),
+                file_name=fdata.get("file_name", ""),
+                file_size_bytes=fdata.get("file_size_bytes"),
+                quality=fdata.get("quality", "") or "",
+                source=fdata.get("source", "") or "",
+                codec=fdata.get("codec", "") or "",
+                version_tag=(fdata.get("version_tag") or "").lower()
+                if (fdata.get("version_tag") or "").lower()
+                in dict(MediaFile.VERSION_TAG_CHOICES)
+                else "",
+                is_multi_part=bool(fdata.get("is_multi_part")),
+                part_number=fdata.get("part_number") or 1,
+                episode=episode,
+            )
+
+    def _sync_credits(self, instance, payloads):
+        """Replace cast/crew from [{person, role, character_name, order}]"""
+        from .models import Credit
+
+        instance.credits.all().delete()
+        valid_roles = dict(Credit.CREDIT_ROLE_CHOICES)
+        for i, cdata in enumerate(payloads):
+            person_id = cdata.get("person") or cdata.get("person_id")
+            if not person_id:
+                continue
+            try:
+                person = Person.objects.get(pk=person_id)
+            except (Person.DoesNotExist, ValueError, TypeError):
+                continue
+            role = cdata.get("role", "actor")
+            if role not in valid_roles:
+                role = "actor"
+            Credit.objects.create(
+                media_item=instance,
+                person=person,
+                role=role,
+                character_name=cdata.get("character_name", "") or "",
+                order=cdata.get("order", i),
+            )
 
     def to_internal_value(self, data):
         ret = super().to_internal_value(data)
         # Keep relation payloads for post-save handling; strip them from the
         # dict passed to Model.create()/update() by keeping a copy here.
         self._relation_data = {
-            k: ret.pop(k) for k in ("genre_ids", "tag_ids", "season_payloads") if k in ret
+            k: ret.pop(k)
+            for k in (
+                "genre_ids",
+                "tag_ids",
+                "season_payloads",
+                "file_payloads",
+                "credit_payloads",
+            )
+            if k in ret
         }
         return ret
 
@@ -218,19 +296,46 @@ class MediaItemSerializer(serializers.ModelSerializer):
 
 
 class BulkImportRowSerializer(serializers.Serializer):
-    """One row of an Excel/CSV/clipboard bulk import."""
+    """One row of an Excel/CSV/clipboard bulk import.
+
+    Accepts both API-style keys (title_en/year) and the frontend store's
+    keys (title_english/release_year); aliases are normalized in validate().
+    """
 
     imdb_id = serializers.CharField(required=False, allow_blank=True)
-    title_en = serializers.CharField()
+    title_en = serializers.CharField(required=False)
+    title_english = serializers.CharField(required=False)
     title_original = serializers.CharField(required=False, allow_blank=True)
     year = serializers.IntegerField(required=False)
+    release_year = serializers.IntegerField(required=False)
     media_type = serializers.ChoiceField(choices=MediaItem.MEDIA_TYPE_CHOICES, required=False)
+    type = serializers.CharField(required=False)
     genres = serializers.ListField(child=serializers.CharField(), required=False)
     tags = serializers.ListField(child=serializers.CharField(), required=False)
     file_path = serializers.CharField(required=False, allow_blank=True)
     hard_drive_label = serializers.CharField(required=False, allow_blank=True)
     skip_duplicates = serializers.BooleanField(required=False, default=True)
+    mode = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        if not attrs.get("title_en"):
+            if not attrs.get("title_english"):
+                raise serializers.ValidationError("title_en or title_english is required")
+            attrs["title_en"] = attrs.pop("title_english")
+        else:
+            attrs.pop("title_english", None)
+        if attrs.get("year") is None and attrs.get("release_year") is not None:
+            attrs["year"] = attrs.pop("release_year")
+        else:
+            attrs.pop("release_year", None)
+        if not attrs.get("media_type") and attrs.get("type") in ("movie", "series"):
+            attrs["media_type"] = attrs["type"]
+        attrs.pop("type", None)
+        return attrs
 
 
 class BulkImportSerializer(serializers.Serializer):
     rows = BulkImportRowSerializer(many=True)
+    mode = serializers.ChoiceField(
+        choices=["create", "skip", "update"], required=False, default="skip"
+    )
