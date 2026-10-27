@@ -13,6 +13,7 @@ router.register("seasons", views.SeasonViewSet, basename="season")
 
 urlpatterns = [
     path("", include(router.urls)),
+    path("health/", views.health, name="health"),
     path("auth/token/", views.obtain_token, name="obtain-token"),
     path("bulk-import/", views.bulk_import, name="bulk-import"),
     path("scan/", views.scan, name="scan"),

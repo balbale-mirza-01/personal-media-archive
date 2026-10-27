@@ -21,6 +21,12 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     clearDemoUser();
+    // Drop the DRF token too so the store returns to local mode.
+    try {
+      localStorage.removeItem("mkbs_api_token");
+    } catch {
+      /* noop */
+    }
     setUser(null);
     setIsAuthenticated(false);
   };

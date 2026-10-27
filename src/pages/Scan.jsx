@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { useStore } from "@/lib/StoreContext";
 import { parseFilename, mockImdbSearch, uid } from "@/lib/store";
+import { scanApi } from "@/api/endpoints";
+import { getToken } from "@/api/client";
 import { QualityBadge, MpaBadge } from "@/components/Badge";
 import { RatingPill } from "@/components/Stars";
 import { cn } from "@/lib/utils";
@@ -65,22 +67,46 @@ export default function Scan() {
     setResults([]);
     setChosen(null);
     appendLog(`Parsing "${filename.split("/").pop()}"…`);
-    setTimeout(() => {
+    setTimeout(async () => {
       setStep(2);
       appendLog(
         `Detected: "${parsed.title}"${parsed.year ? ` (${parsed.year})` : ""}${parsed.isSeries ? ` · S${parsed.season}E${parsed.episode}` : ""}${parsed.quality ? ` · ${parsed.quality}` : ""}`,
       );
-      appendLog("Querying IMDb…");
-      setTimeout(() => {
-        const res = mockImdbSearch(parsed.title, parsed.year);
-        setResults(res);
-        setStep(3);
-        appendLog(
-          res.length
-            ? `Found ${res.length} candidate match${res.length > 1 ? "es" : ""}.`
-            : "No IMDb matches found.",
-        );
-      }, 700);
+      appendLog(getToken() ? "Querying IMDb via backend…" : "Querying IMDb…");
+      let res;
+      try {
+        if (getToken()) {
+          // Real backend matcher (Phase 6): candidate list for verification.
+          const data = await scanApi.imdbSearch(
+            parsed.title,
+            parsed.year || undefined,
+            parsed.isSeries ? "series" : "movie",
+          );
+          res = (data.candidates || data.results || []).map((c) => ({
+            imdb_id: c.imdb_id,
+            title: c.title,
+            year: c.year,
+            type:
+              c.media_type || c.type || (parsed.isSeries ? "series" : "movie"),
+            rating: c.rating ?? null,
+            genres: c.genres || [],
+            mpa: c.mpa_rating || c.mpa || "",
+            runtime: c.runtime_minutes ?? c.runtime ?? null,
+          }));
+        } else {
+          res = mockImdbSearch(parsed.title, parsed.year);
+        }
+      } catch (e) {
+        appendLog(`Backend search failed (${e.message}); using local pool.`);
+        res = mockImdbSearch(parsed.title, parsed.year);
+      }
+      setResults(res);
+      setStep(3);
+      appendLog(
+        res.length
+          ? `Found ${res.length} candidate match${res.length > 1 ? "es" : ""}.`
+          : "No IMDb matches found.",
+      );
     }, 500);
   };
 
@@ -111,16 +137,26 @@ export default function Scan() {
       watchlist_context: "alone",
       watchlist_added_at: new Date().toISOString().slice(0, 10),
       notes: `Imported via scan from ${active.filename}`,
-      genre_ids: match.genres
-        .map((gn) => db.genres.find((g) => g.name === gn)?.id)
+      genre_ids: (match.genres || [])
+        .map((gn) =>
+          typeof gn === "string"
+            ? db.genres.find((g) => g.name === gn)?.id
+            : String(gn.id),
+        )
         .filter(Boolean),
       cast: [],
       crew: [],
       files: [
         {
           id: uid("f"),
+          // In API mode the backend links files to drives by mount_path, so
+          // send a real path; in local mode keep the drive-relative label.
           hard_drive_id: selectedDrive,
-          file_path: active.filename,
+          file_path: getToken()
+            ? (drive?.mount_path || "") +
+              "/" +
+              active.filename.replace(/^.*?:/, "").replace(/^\//, "")
+            : active.filename,
           file_size: 0,
           is_multi_part: false,
           part_number: 1,

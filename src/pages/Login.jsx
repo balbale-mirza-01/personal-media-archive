@@ -1,6 +1,16 @@
-import React from "react";
-import { Clapperboard, Shield, User, ArrowRight } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import {
+  Clapperboard,
+  Shield,
+  User,
+  ArrowRight,
+  Database,
+  WifiOff,
+} from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
+import { authApi } from "@/api/endpoints";
+import { setToken } from "@/api/client";
+import { pingBackend } from "@/lib/backendStatus";
 import { cn } from "@/lib/utils";
 
 const ACCOUNTS = [
@@ -20,8 +30,27 @@ const ACCOUNTS = [
 
 export default function Login() {
   const { login } = useAuth();
+  const [backendOnline, setBackendOnline] = useState(null); // null = checking
 
-  const signIn = (acc) => {
+  useEffect(() => {
+    let alive = true;
+    pingBackend().then((ok) => alive && setBackendOnline(ok));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const signIn = async (acc) => {
+    // Try to obtain a DRF token from the Django backend (Phase 7).
+    // Demo credentials match the seeded users: username = role, pass demo1234.
+    // If the backend is offline we stay in local mode — the demo login page
+    // keeps working exactly as before.
+    try {
+      const res = await authApi.token(acc.role, "demo1234");
+      if (res?.token) setToken(res.token);
+    } catch {
+      setToken(null);
+    }
     login({ role: acc.role, name: acc.name });
     window.location.href = "/";
   };
@@ -40,6 +69,42 @@ export default function Login() {
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-6 space-y-3">
+          {/* Backend connection indicator (Phase 7): shows whether the Django
+              DRF API is reachable. Offline => app runs on the local demo store. */}
+          <div
+            className={cn(
+              "flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium",
+              backendOnline === null &&
+                "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
+              backendOnline === true &&
+                "bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-400",
+              backendOnline === false &&
+                "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400",
+            )}
+          >
+            {backendOnline === null && (
+              <>
+                <Database className="h-3.5 w-3.5 animate-pulse" />
+                Checking backend…
+              </>
+            )}
+            {backendOnline === true && (
+              <>
+                <Database className="h-3.5 w-3.5" />
+                Connected to Django API — data will load from the server
+              </>
+            )}
+            {backendOnline === false && (
+              <>
+                <WifiOff className="h-3.5 w-3.5" />
+                Backend offline — running in local demo mode. Start it with
+                <code className="ml-1 rounded bg-amber-100 px-1 py-0.5 font-mono dark:bg-amber-900/50">
+                  python manage.py runserver 8000
+                </code>
+              </>
+            )}
+          </div>
+
           <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
             Choose an account
           </p>

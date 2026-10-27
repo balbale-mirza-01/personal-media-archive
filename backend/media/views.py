@@ -24,6 +24,20 @@ from .serializers import (
 )
 
 
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def health(request):
+    """Unauthenticated liveness probe used by the frontend to decide
+    whether to run in API mode or fall back to the local demo store."""
+    from django.db import connection
+    try:
+        connection.ensure_connection()
+        db = True
+    except Exception:
+        db = False
+    return Response({"status": "ok", "db": db, "items": MediaItem.objects.count() if db else 0})
+
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def obtain_token(request):
