@@ -237,10 +237,11 @@ export function personFromApi(p) {
 export function personToApi(p) {
   return {
     imdb_person_id: p.imdb_person_id || "",
-    name: p.name || "",
+    first_name: p.first_name || "",
+    last_name: p.last_name || "",
     original_name: p.original_name || "",
     roles: p.roles || [],
-    bio: p.bio || "",
+    bio: p.bio || p.biography || "",
     profile_image_url: p.profile_image_url || "",
   };
 }

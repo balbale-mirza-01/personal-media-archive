@@ -65,9 +65,9 @@ class Command(BaseCommand):
         t_4k = _tag(name="4K Master", color="teal")
         _tag(name="Family Night", color="emerald")
 
-        nolan = _person(imdb_person_id="nm0634240", name="Christopher Nolan", roles=["director", "writer"])
-        mcconaughey = _person(imdb_person_id="nm0198896", name="Matthew McConaughey", roles=["actor"])
-        glover = _person(imdb_person_id="nm0000423", name="Danny Glover", roles=["actor"])
+        nolan = _person(imdb_person_id="nm0634240", first_name="Christopher", last_name="Nolan", roles=["director", "writer"])
+        mcconaughey = _person(imdb_person_id="nm0198896", first_name="Matthew", last_name="McConaughey", roles=["actor"])
+        glover = _person(imdb_person_id="nm0000423", first_name="Danny", last_name="Glover", roles=["actor"])
 
         inter, _ = MediaItem.objects.get_or_create(
             imdb_id="tt0816692", title_en="Interstellar", year=2014, mpa_rating="PG-13",

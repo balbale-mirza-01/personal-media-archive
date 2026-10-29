@@ -251,7 +251,11 @@ export function statusLabel(s) {
 }
 
 export function fullName(p) {
-  return p ? `${p.first_name} ${p.last_name}` : "—";
+  if (!p) return "—";
+  // Persons are stored with separate name parts; fall back to a single
+  // `name` field (or IMDb id) so nothing ever renders as "undefined".
+  const name = [p.first_name, p.last_name].filter(Boolean).join(" ").trim();
+  return name || p.name || p.full_name || p.imdb_person_id || "—";
 }
 
 export function driveUsedSpace(db, driveId) {

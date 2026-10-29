@@ -52,14 +52,20 @@ class Tag(TimestampedModel):
 
 class Person(TimestampedModel):
     imdb_person_id = models.CharField(max_length=20, unique=True)  # nm#######
-    name = models.CharField(max_length=200)
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100, blank=True)
     original_name = models.CharField(max_length=200, blank=True)
     roles = models.JSONField(default=list, blank=True)  # ["director", "actor", ...]
     bio = models.TextField(blank=True)
     profile_image_url = models.URLField(max_length=500, blank=True)
 
+    @property
+    def full_name(self):
+        """Convenience "First Last" string (frontend renders from parts)."""
+        return f"{self.first_name} {self.last_name}".strip()
+
     def __str__(self):
-        return self.name
+        return self.full_name
 
 
 class MediaItem(TimestampedModel):

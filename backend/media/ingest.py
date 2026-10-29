@@ -30,15 +30,29 @@ from .models import (
 from .selectors import recompute_series
 
 
+def _split_name(name):
+    """Split a full IMDb person name into (first_name, last_name)."""
+    parts = (name or "").strip().split(" ", 1)
+    first = parts[0] if parts else ""
+    last = parts[1] if len(parts) > 1 else ""
+    return first, last
+
+
 def _get_person(nm, name):
     if not nm:
         return None
+    first, last = _split_name(name)
     person, created = Person.objects.get_or_create(
-        imdb_person_id=nm, defaults={"name": name or nm}
+        imdb_person_id=nm,
+        defaults={"first_name": first or nm, "last_name": last},
     )
-    if not created and name and person.name != name:
-        person.name = name
-        person.save(update_fields=["name", "updated_at"])
+    if not created and name:
+        new_first, new_last = _split_name(name)
+        if (new_first, new_last) != (person.first_name, person.last_name) \
+                and (new_first or new_last):
+            person.first_name = new_first
+            person.last_name = new_last
+            person.save(update_fields=["first_name", "last_name", "updated_at"])
     return person
 
 

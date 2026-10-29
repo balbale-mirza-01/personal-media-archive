@@ -56,13 +56,34 @@ class TagSerializer(serializers.ModelSerializer):
 
 class PersonSerializer(serializers.ModelSerializer):
     id = serializers.CharField(read_only=True)
+    full_name = serializers.CharField(read_only=True)
 
     class Meta:
         model = Person
         fields = [
-            "id", "imdb_person_id", "name", "original_name",
+            "id", "imdb_person_id", "first_name", "last_name", "full_name",
+            "original_name",
             "roles", "bio", "profile_image_url", "created_at", "updated_at",
         ]
+        extra_kwargs = {
+            "first_name": {"allow_blank": False},
+        }
+
+    def validate(self, attrs):
+        """Require at least one of first/last name to be non-blank."""
+        data = super().validate(attrs)
+        instance = self.instance
+        first = (data.get("first_name")
+                 if "first_name" in data
+                 else getattr(instance, "first_name", "") or "")
+        last = (data.get("last_name")
+                if "last_name" in data
+                else getattr(instance, "last_name", "") or "")
+        if not (first.strip() or last.strip()):
+            raise serializers.ValidationError(
+                {"first_name": ["This field may not be blank."]}
+            )
+        return data
 
 
 class CreditSerializer(serializers.ModelSerializer):

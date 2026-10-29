@@ -86,7 +86,7 @@ class PersonViewSet(viewsets.ModelViewSet):
     queryset = Person.objects.all()
     serializer_class = PersonSerializer
     permission_classes = [IsAuthenticated]
-    search_fields = ["name", "imdb_person_id"]
+    search_fields = ["first_name", "last_name", "imdb_person_id"]
 
     @action(detail=True, methods=["get"])
     def filmography(self, request, pk=None):
