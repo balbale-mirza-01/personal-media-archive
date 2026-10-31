@@ -1,20 +1,34 @@
-"""IMDb search & metadata engine.
+"""IMDb search & metadata engine with a layered provider strategy.
 
-Live mode (active when IMDB_API_KEY is set):
-  - Search: IMDb suggestion endpoint (v3.sg.media-imdb.com) -> candidate list
-    [{imdb_id, title, year, media_type, poster_url}] for user verification.
-  - Details: imdb-api.com Title + CombinedCredits + ParentsGuide endpoints,
-    normalized into our canonical shape (genres, nm####### cast/crew ids,
-    ratings/votes, structured parents_guide severities).
+Primary provider — HTML scraping via ``imdb_scraper`` (no official/paid API):
+  - Details: the title page's embedded ``__NEXT_DATA__`` JSON payload plus the
+    parental-guide page (advisory categories + severity levels), person
+    profiles (nm#######) and interest taxonomy links (in#######).
+  - Search: IMDb's exact find URL
+    ``https://www.imdb.com/find/?q=...&s=tt&exact=true&ttype=ft,tv`` parsed
+    from its ``__NEXT_DATA__`` JSON (HTML fallback included).
 
-Offline/demo mode (IMDB_FORCE_OFFLINE=1, no key, or network failure):
+Secondary providers (used only when scraping is blocked/unavailable):
+  - IMDB_API_KEY set: imdb-api.com Title/CombinedCredits/ParentsGuide JSON.
+  - Suggestion endpoint (v3.sg.media-imdb.com) for quick candidate lists.
+
+Offline/demo mode (IMDB_FORCE_OFFLINE=1, or every provider failed):
   deterministic local pool so development and testing work without internet.
+
+Provider order can be forced with IMDB_PROVIDER=scrape|api|offline.
 """
+import logging
 import os
 import re
 import json
 import urllib.parse
 import urllib.request
+
+from . import imdb_scraper
+
+log = logging.getLogger(__name__)
+
+PROVIDER_ENV = "IMDB_PROVIDER"          # scrape (default) | api | offline
 
 SEARCH_URL = "https://v3.sg.media-imdb.com/suggestion/x/{q}.json"
 TITLE_URL = "https://imdb-api.com/en/API/Title/k_{key}/{tt}"
@@ -260,27 +274,80 @@ def _live_details(imdb_id):
 
 
 # ---------------------------------------------------------------------------
+# Provider selection
+# ---------------------------------------------------------------------------
+def forced_provider():
+    return (os.environ.get(PROVIDER_ENV) or "").strip().lower()
+
+
+def is_offline():
+    if forced_provider() == "offline":
+        return True
+    return os.environ.get(OFFLINE_FLAG, "") == "1"
+
+
+def scraping_enabled():
+    provider = forced_provider()
+    if provider == "offline":
+        return False
+    if provider == "api":
+        return bool(os.environ.get(API_KEY_ENV)) and False  # api-only mode
+    return not is_offline()
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
-def is_offline():
-    return os.environ.get(OFFLINE_FLAG, "") == "1" or not os.environ.get(API_KEY_ENV)
-
-
 def search_titles(query, year=None, media_type=None):
-    """Candidate list [{imdb_id,title,year,media_type,poster_url}] for user verification."""
+    """Candidate list [{imdb_id,title,year,media_type,poster_url}] for user verification.
+
+    Layered providers: __NEXT_DATA__ /find/ scrape -> suggestion endpoint ->
+    imdb-api.com key -> offline demo pool. Each candidate carries a ``source``
+    key so callers can tell whether the data is real scraped IMDb data.
+    """
+    if scraping_enabled():
+        try:
+            results = imdb_scraper.scrape_find(query, year, media_type)
+            if results:
+                for r in results:
+                    r.setdefault("source", "next_data_scrape")
+                return results
+            log.warning("Find scrape returned 0 candidates for %r; trying next provider",
+                        query)
+        except Exception as exc:  # noqa: BLE001 - provider fallback chain
+            log.warning("IMDb find scrape failed (%s); trying next provider", exc)
     if not is_offline():
         try:
-            return _live_search(query, year, media_type)
-        except Exception:
-            pass  # network/provider failure -> fall back to demo pool
-    return _offline_search(query, year, media_type)
+            out = _live_search(query, year, media_type)
+            for r in out or []:
+                r.setdefault("source", "html_fallback")
+            return out
+        except Exception as exc:  # noqa: BLE001
+            log.warning("IMDb live search failed (%s); falling back to offline pool", exc)
+    out = _offline_search(query, year, media_type)
+    for r in out or []:
+        r.setdefault("source", "offline_pool")
+    return out
 
 
 def get_title_details(imdb_id):
-    """Full canonical metadata for a verified imdb_id, or None if unknown."""
-    if not is_offline():
+    """Full canonical metadata for a verified imdb_id, or None if unknown.
+
+    Layered providers: __NEXT_DATA__ title+parentalguide scrape ->
+    imdb-api.com (key required) -> offline demo pool. The returned dict's
+    ``source`` key identifies which provider answered.
+    """
+    if scraping_enabled():
+        try:
+            details = imdb_scraper.scrape_title_details(imdb_id)
+            if details and details.get("title"):
+                return details
+            log.warning("Title scrape returned no usable data for %s", imdb_id)
+        except Exception as exc:  # noqa: BLE001 - provider fallback chain
+            log.warning("IMDb title scrape failed for %s (%s)", imdb_id, exc)
+    if not is_offline() and os.environ.get(API_KEY_ENV):
         try:
             return _live_details(imdb_id)
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001
+            log.warning("IMDb api details failed for %s (%s)", imdb_id, exc)
     return _offline_details(imdb_id)

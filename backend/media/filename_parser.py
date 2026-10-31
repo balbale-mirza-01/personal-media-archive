@@ -5,11 +5,19 @@ Parses release-style filenames like:
     Interstellar (2014) [2160p WEB-DL] CD1.mkv
     Breaking.Bad.S01E03.720p.WEB-DL.x264-NTb.mkv
 into {title_guess, year, season, episode, quality, source, codec, part, multi_part}.
+
+Also exposes ``parse_query_line`` — the mixed-batch-query parser used by the
+/bulk-match/ endpoint (User Story 3): each line of a bulk list can be an exact
+IMDb id (tt#######), an IMDb URL, or a clean/messy filename/title which is
+stripped of release artifacts down to a core title (+ optional year).
 """
 import os
 import re
 
 VIDEO_EXTENSIONS = {".mkv", ".mp4"}
+
+_IMDB_ID_RE = re.compile(r"\b(tt\d{7,10})\b", re.IGNORECASE)
+_IMDB_URL_RE = re.compile(r"imdb\.com/title/(tt\d{7,10})", re.IGNORECASE)
 
 _SEASON_EPISODE_RES = [
     re.compile(r"[sS](\d{1,2})[\s._-]?[eE](\d{1,3})"),   # S01E03
@@ -153,3 +161,65 @@ def parse_filename(file_name: str) -> dict:
 
 def is_video_file(path: str) -> bool:
     return os.path.splitext(path)[1].lower() in VIDEO_EXTENSIONS
+
+
+def normalize_imdb_id(text):
+    """Extract a canonical tt####### IMDb id from raw text, or '' if absent."""
+    text = (text or "").strip()
+    m = _IMDB_URL_RE.search(text)
+    if m:
+        return m.group(1).lower()
+    # A bare/whole-token imdb id (avoid matching ids embedded in filenames? —
+    # filenames never legitimately contain tt#######, so match anywhere).
+    m = _IMDB_ID_RE.search(text)
+    if m:
+        return m.group(1).lower()
+    return ""
+
+
+def parse_query_line(line):
+    """Parse one bulk-query line into a structured search intent.
+
+    Accepts:
+      - exact IMDb ids ("tt10370710") or IMDb URLs,
+      - clean titles ("Inception"), possibly with year ("Inception 2010"),
+      - messy release filenames ("The.Matrix.1999.1080p.BluRay.x264-GRP.mkv").
+
+    Returns {raw, kind, imdb_id, title_guess, year, season, episode,
+             is_series, quality, source, codec}.
+    """
+    raw = (line or "").strip()
+    result = {
+        "raw": raw, "kind": "title", "imdb_id": "", "title_guess": "",
+        "year": None, "season": None, "episode": None, "is_series": False,
+        "quality": "", "source": "", "codec": "",
+    }
+    if not raw:
+        return result
+
+    imdb_id = normalize_imdb_id(raw)
+    is_pure_id = re.fullmatch(r"tt\d{7,10}", raw, re.IGNORECASE) is not None
+    is_imdb_url = _IMDB_URL_RE.fullmatch(raw.rstrip("/"), ) is not None or \
+        re.match(r"^(https?://)?(www\.)?imdb\.com/title/tt\d{7,10}", raw, re.IGNORECASE)
+    if imdb_id and (is_pure_id or is_imdb_url):
+        result.update(kind="imdb_id", imdb_id=imdb_id)
+        return result
+
+    name = raw.split("/")[-1].split("\\")[-1].strip()
+    parsed = parse_filename(name)
+    result.update(
+        title_guess=parsed["title_guess"] or name,
+        year=parsed["year"],
+        season=parsed["season"],
+        episode=parsed["episode"],
+        is_series=parsed["season"] is not None,
+        quality=parsed["quality"],
+        source=parsed["source"],
+        codec=parsed["codec"],
+    )
+    # An embedded IMDb id inside an otherwise-messy line still wins.
+    if imdb_id:
+        result.update(kind="imdb_id", imdb_id=imdb_id)
+    elif result["is_series"]:
+        result["kind"] = "episode"
+    return result

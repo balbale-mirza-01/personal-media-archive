@@ -169,7 +169,7 @@ class MediaItemSerializer(serializers.ModelSerializer):
             "genres", "genre_ids", "tags", "tag_ids", "credits",
             "imdb_rating", "imdb_votes", "personal_rating",
             "watch_status", "watchlist_context", "watchlist_added_at",
-            "parents_guide", "parental_notes", "notes",
+            "parents_guide", "parents_guide_notes", "parental_notes", "notes",
             "files", "seasons", "season_payloads",
             "file_payloads", "credit_payloads",
             "created_at", "updated_at",

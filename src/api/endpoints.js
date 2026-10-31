@@ -90,5 +90,9 @@ export const scanApi = {
   imdbSearch: (q, year, type) =>
     api.get(`/imdb/search/${qs({ q, year, type })}`),
   imdbDetails: (imdb_id) => api.get(`/imdb/search/${qs({ imdb_id })}`),
+  // User Story 3: mixed bulk list (ids / URLs / titles / filenames), one item
+  // per line -> review rows with suggested matches, confidence & candidates.
+  bulkMatch: (lines, delay_ms = 300) =>
+    api.post("/bulk-match/", { lines, delay_ms }),
   ingest: (selections) => api.post("/ingest/", { selections }),
 };

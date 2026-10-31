@@ -18,6 +18,7 @@ urlpatterns = [
     path("bulk-import/", views.bulk_import, name="bulk-import"),
     path("scan/", views.scan, name="scan"),
     path("imdb/search/", views.imdb_search, name="imdb-search"),
+    path("bulk-match/", views.bulk_match, name="bulk-match"),
     path("ingest/", views.ingest, name="ingest"),
     path("episodes/<int:pk>/toggle/", views.episode_toggle, name="episode-toggle"),
     path("seasons/<int:pk>/recompute/", views.season_recompute, name="season-recompute"),

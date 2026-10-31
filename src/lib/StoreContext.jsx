@@ -732,6 +732,7 @@ export function StoreProvider({ children }) {
     mode,
     ready,
     syncError,
+    refresh: () => setHydrateTick((x) => x + 1),
     addMedia,
     updateMedia,
     deleteMedia,

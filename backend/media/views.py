@@ -8,6 +8,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from .bulk_match import bulk_match_lines
 from .imdb_client import get_title_details, search_titles
 from .ingest import ingest_selections
 from .models import Credit, Genre, HardDrive, MediaFile, MediaItem, Person, Season, Tag
@@ -360,6 +361,38 @@ def imdb_search(request):
     media_type = request.query_params.get("type")
     candidates = search_titles(q, int(year) if year else None, media_type)
     return Response({"query": q, "candidates": candidates})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def bulk_match(request):
+    """Batch query processing & matching (User Story 3).
+
+    Body: {"lines": ["tt10370710", "The.Matrix.1999.1080p.BluRay.x264.mkv", ...],
+           "delay_ms": 300}
+    Accepts a mixed bulk list — one item per line (exact IMDb id, IMDb URL,
+    clean title, or messy release filename). Each line is stripped of release
+    artifacts, resolved through the IMDb /find/ search pipeline (User Story 2)
+    and returned as a review table of suggested matches with confidence
+    scores and ranked candidates. Nothing is written to the DB; confirmed
+    rows are imported through /ingest/ (User Story 1 applied in bulk).
+    """
+    lines = request.data.get("lines")
+    if isinstance(lines, str):
+        lines = lines.splitlines()
+    lines = [str(l) for l in (lines or []) if str(l).strip()]
+    if not lines:
+        return Response({"error": "lines[] is required"},
+                        status=status.HTTP_400_BAD_REQUEST)
+    if len(lines) > 500:
+        return Response({"error": "too many lines (max 500 per batch)"},
+                        status=status.HTTP_400_BAD_REQUEST)
+    try:
+        delay_ms = min(max(int(request.data.get("delay_ms", 300)), 0), 5000)
+    except (TypeError, ValueError):
+        delay_ms = 300
+    rows, summary = bulk_match_lines(lines, delay_ms=delay_ms)
+    return Response({"rows": rows, "summary": summary})
 
 
 @api_view(["POST"])

@@ -121,6 +121,7 @@ class MediaItem(TimestampedModel):
 
     # Parents guide (structured categories + personal notes)
     parents_guide = models.JSONField(default=dict, blank=True)
+    parents_guide_notes = models.JSONField(default=dict, blank=True)
     parental_notes = models.TextField(blank=True)
 
     notes = models.TextField(blank=True)
